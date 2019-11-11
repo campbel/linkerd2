@@ -301,6 +301,44 @@ func TestValidate(t *testing.T) {
 		}
 	})
 
+	t.Run("Validates the issuer certs upon install", func(t *testing.T) {
+
+		testCases := []struct {
+			crtFilePrefix string
+			expectedError string
+		}{
+			{"expired", "failed to verify issuer certs stored on disk: certificate not valid anymore. Expired at: 1990-01-01T01:01:11Z"},
+			{"not-valid-yet", "failed to verify issuer certs stored on disk: certificate not valid before: 2100-01-01T01:00:51Z"},
+			{"wrong-domain", "failed to verify issuer certs stored on disk: invalid credentials: x509: certificate is valid for wrong.linkerd.cluster.local, not identity.linkerd.cluster.local"},
+		}
+		for _, tc := range testCases {
+
+			options, err := testInstallOptions()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v\n", err)
+			}
+
+			options.identityOptions.crtPEMFile = filepath.Join("testdata", tc.crtFilePrefix+"-crt.pem")
+			options.identityOptions.keyPEMFile = filepath.Join("testdata", tc.crtFilePrefix+"-key.pem")
+			options.identityOptions.trustPEMFile = filepath.Join("testdata", tc.crtFilePrefix+"-trust-anchors.pem")
+
+			_, err = options.identityOptions.validateAndBuild()
+
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Fatal("Expected error, got nothing")
+				}
+				if err.Error() != tc.expectedError {
+					t.Fatalf("Expected error string\"%s\", got \"%s\"", tc.expectedError, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error bu got \"%s\"", err)
+				}
+			}
+		}
+	})
+
 	t.Run("Rejects identity cert files data when external issuer is set", func(t *testing.T) {
 
 		options, err := testInstallOptions()

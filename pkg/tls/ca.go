@@ -52,6 +52,8 @@ type (
 		// processes the certificates must have a system clock that is off by no
 		// more than this allowance in either direction.
 		ClockSkewAllowance time.Duration
+
+		CreatedAt *time.Time
 	}
 
 	// Issuer implementors signs certificate requests.
@@ -232,7 +234,7 @@ func createTemplate(
 	// anyway since a P-256 scalar is only 256 bits long.
 	const SignatureAlgorithm = x509.ECDSAWithSHA256
 
-	notBefore, notAfter := v.Window(time.Now())
+	notBefore, notAfter := v.Window()
 
 	return &x509.Certificate{
 		SerialNumber:       big.NewInt(int64(serialNumber)),
@@ -249,7 +251,12 @@ func createTemplate(
 }
 
 // Window returns the time window for which a certificate should be valid.
-func (v *Validity) Window(t time.Time) (time.Time, time.Time) {
+func (v *Validity) Window() (time.Time, time.Time) {
+	t := v.CreatedAt
+	if t == nil {
+		now := time.Now()
+		t = &now
+	}
 	life := v.Lifetime
 	if life == 0 {
 		life = DefaultLifetime
