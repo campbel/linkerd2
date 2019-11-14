@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const кeyMissingError = "key %s containing the %s needs to exist in secret %s if --identity-external-issuer=%v"
+const keyMissingError = "key %s containing the %s needs to exist in secret %s if --identity-external-issuer=%v"
 
 // IssuerCertData holds the root cert data used by the CA
 type IssuerCertData struct {
@@ -32,12 +32,12 @@ func FetchIssuerData(api *k8s.KubernetesAPI, trustAnchors, controlPlaneNamespace
 
 	crt, ok := secret.Data[k8s.IdentityIssuerCrtName]
 	if !ok {
-		return nil, fmt.Errorf(кeyMissingError, k8s.IdentityIssuerCrtName, "issuer certificate", consts.IdentityIssuerSecretName, false)
+		return nil, fmt.Errorf(keyMissingError, k8s.IdentityIssuerCrtName, "issuer certificate", consts.IdentityIssuerSecretName, false)
 	}
 
 	key, ok := secret.Data[k8s.IdentityIssuerKeyName]
 	if !ok {
-		return nil, fmt.Errorf(кeyMissingError, k8s.IdentityIssuerKeyName, "issuer key", consts.IdentityIssuerSecretName, true)
+		return nil, fmt.Errorf(keyMissingError, k8s.IdentityIssuerKeyName, "issuer key", consts.IdentityIssuerSecretName, true)
 	}
 
 	return &IssuerCertData{trustAnchors, string(crt), string(key)}, nil
@@ -52,17 +52,17 @@ func FetchExternalIssuerData(api *k8s.KubernetesAPI, controlPlaneNamespace strin
 
 	anchors, ok := secret.Data[consts.IdentityIssuerTrustAnchorsNameExternal]
 	if !ok {
-		return nil, fmt.Errorf(кeyMissingError, consts.IdentityIssuerTrustAnchorsNameExternal, "trust anchors", consts.IdentityIssuerSecretName, true)
+		return nil, fmt.Errorf(keyMissingError, consts.IdentityIssuerTrustAnchorsNameExternal, "trust anchors", consts.IdentityIssuerSecretName, true)
 	}
 
 	crt, ok := secret.Data[corev1.TLSCertKey]
 	if !ok {
-		return nil, fmt.Errorf(кeyMissingError, corev1.TLSCertKey, "issuer certificate", consts.IdentityIssuerSecretName, true)
+		return nil, fmt.Errorf(keyMissingError, corev1.TLSCertKey, "issuer certificate", consts.IdentityIssuerSecretName, true)
 	}
 
 	key, ok := secret.Data[corev1.TLSPrivateKeyKey]
 	if !ok {
-		return nil, fmt.Errorf(кeyMissingError, corev1.TLSPrivateKeyKey, "issuer key", consts.IdentityIssuerSecretName, true)
+		return nil, fmt.Errorf(keyMissingError, corev1.TLSPrivateKeyKey, "issuer key", consts.IdentityIssuerSecretName, true)
 	}
 
 	return &IssuerCertData{string(anchors), string(crt), string(key)}, nil

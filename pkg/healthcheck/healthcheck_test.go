@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"path"
 	"reflect"
 	"strings"
 	"testing"
@@ -1838,7 +1836,7 @@ func createIssuerData(dnsName string, notBefore, notAfter time.Time) *issuercert
 
 	rootCa, _ := tls.CreateRootCA(dnsName, key, tls.Validity{
 		Lifetime:  notAfter.Sub(notBefore),
-		CreatedAt: &notBefore,
+		ValidFrom: &notBefore,
 	})
 
 	return &issuercerts.IssuerCertData{
@@ -1861,7 +1859,6 @@ func TestValidateIssuerCert(t *testing.T) {
 		schemeInConfig     string
 		expectedErr        error
 		expectedWarning    error
-		fileNameToSave     string
 	}{
 		{
 			checkDescription: "works with valid cert and linkerd.io/tls secret",
@@ -1875,48 +1872,51 @@ func TestValidateIssuerCert(t *testing.T) {
 			schemeInConfig:   string(corev1.SecretTypeTLS),
 			expectedErr:      nil,
 		},
-
+		{
+			checkDescription: "works if config scheme is empty and secret scheme is linkerd.io/tls (pre 2.7)",
+			tlsSecretScheme:  k8s.IdentityIssuerSchemeLinkerd,
+			schemeInConfig:   "",
+			expectedErr:      nil,
+		},
+		{
+			checkDescription: "fails if config scheme is empty and secret scheme is kubernetes.io/tls (pre 2.7)",
+			tlsSecretScheme:  string(corev1.SecretTypeTLS),
+			schemeInConfig:   "",
+			expectedErr:      errors.New("key crt.pem containing the issuer certificate needs to exist in secret linkerd-identity-issuer if --identity-external-issuer=false"),
+		},
 		{
 			checkDescription: "fails when config scheme is linkerd.io/tls but secret scheme is kubernetes.io/tls in config is different than the one in the issuer secret",
 			tlsSecretScheme:  string(corev1.SecretTypeTLS),
 			schemeInConfig:   k8s.IdentityIssuerSchemeLinkerd,
 			expectedErr:      errors.New("key crt.pem containing the issuer certificate needs to exist in secret linkerd-identity-issuer if --identity-external-issuer=false"),
 		},
-
 		{
 			checkDescription: "fails when config scheme is kubernetes.io/tls but secret scheme is linkerd.io/tls in config is different than the one in the issuer secret",
 			tlsSecretScheme:  k8s.IdentityIssuerSchemeLinkerd,
 			schemeInConfig:   string(corev1.SecretTypeTLS),
 			expectedErr:      errors.New("key ca.crt containing the trust anchors needs to exist in secret linkerd-identity-issuer if --identity-external-issuer=true"),
 		},
-
 		{
 			checkDescription:   "fails when cert dns is wrong",
 			certificateDNSName: "wrong.linkerd.cluster.local",
 			expectedErr:        errors.New("invalid credentials: x509: certificate is valid for wrong.linkerd.cluster.local, not identity.linkerd.cluster.local"),
-			fileNameToSave:     "wrong-domain",
 		},
-
 		{
 			checkDescription: "fails when cert is not valid yet",
 			lifespan: &lifeSpan{
 				starts: time.Date(2100, 1, 1, 1, 1, 1, 1, time.UTC),
 				ends:   time.Date(2101, 1, 1, 1, 1, 1, 1, time.UTC),
 			},
-			expectedErr:    errors.New("certificate not valid before: 2100-01-01T01:00:51Z"),
-			fileNameToSave: "not-valid-yet",
+			expectedErr: errors.New("certificate not valid before: 2100-01-01T01:00:51Z"),
 		},
-
 		{
 			checkDescription: "fails when cert is expired",
 			lifespan: &lifeSpan{
 				starts: time.Date(1989, 1, 1, 1, 1, 1, 1, time.UTC),
 				ends:   time.Date(1990, 1, 1, 1, 1, 1, 1, time.UTC),
 			},
-			expectedErr:    errors.New("certificate not valid anymore. Expired at: 1990-01-01T01:01:11Z"),
-			fileNameToSave: "expired",
+			expectedErr: errors.New("certificate not valid anymore. Expired at: 1990-01-01T01:01:11Z"),
 		},
-
 		{
 			checkDescription: "warns if certificate expires to soon",
 			lifespan: &lifeSpan{
@@ -1952,23 +1952,6 @@ func TestValidateIssuerCert(t *testing.T) {
 			issuerData := createIssuerData(testCase.certificateDNSName, testCase.lifespan.starts, testCase.lifespan.ends)
 			config := getFakeConfig(testCase.tlsSecretScheme, testCase.schemeInConfig, issuerData)
 
-			/*			o.heartbeatSchedule = fakeHeartbeatSchedule
-						o.identityOptions.crtPEMFile = filepath.Join("testdata", "crt.pem")
-						o.identityOptions.keyPEMFile = filepath.Join("testdata", "key.pem")
-						o.identityOptions.trustPEMFile = filepath.Join("testdata", "trust-anchors.pem")
-			*/
-
-			if testCase.fileNameToSave != "" {
-				crtFile := path.Join("/Users/zaharidichev/work/linkerd2/testCerts/testData/", testCase.fileNameToSave+"-crt.pem")
-				keyFile := path.Join("/Users/zaharidichev/work/linkerd2/testCerts/testData/", testCase.fileNameToSave+"-key.pem")
-				anchors := path.Join("/Users/zaharidichev/work/linkerd2/testCerts/testData/", testCase.fileNameToSave+"-trust-anchors.pem")
-
-				ioutil.WriteFile(crtFile, []byte(issuerData.IssuerCrt), 0777)
-				ioutil.WriteFile(keyFile, []byte(issuerData.IssuerKey), 0777)
-				ioutil.WriteFile(anchors, []byte(issuerData.TrustAnchors), 0777)
-
-			}
-
 			var err error
 			hc.kubeAPI, err = k8s.NewFakeAPI(config...)
 			if err != nil {
@@ -1976,13 +1959,13 @@ func TestValidateIssuerCert(t *testing.T) {
 			}
 
 			hc.issuerCerts, err = hc.checkIssuerCertsValidity()
-			if !reflect.DeepEqual(err, testCase.expectedErr) {
+			if err != nil && err.Error() != testCase.expectedErr.Error() {
 				t.Fatalf("Error %q does not match expected error: %q", err, testCase.expectedErr)
 			}
 
 			if testCase.expectedWarning != nil {
 				warn := hc.checkIssuerCertsNotExpiringTooSoon()
-				if !reflect.DeepEqual(warn, testCase.expectedWarning) {
+				if warn != nil && warn.Error() != testCase.expectedWarning.Error() {
 					t.Fatalf("Warning %q does not match expected warning: %q", warn, testCase.expectedWarning)
 				}
 			}

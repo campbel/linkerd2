@@ -199,9 +199,9 @@ func testInstallOptions() (*installOptions, error) {
 	o.proxyVersion = "install-proxy-version"
 	o.controlPlaneVersion = "install-control-plane-version"
 	o.heartbeatSchedule = fakeHeartbeatSchedule
-	o.identityOptions.crtPEMFile = filepath.Join("testdata", "crt.pem")
-	o.identityOptions.keyPEMFile = filepath.Join("testdata", "key.pem")
-	o.identityOptions.trustPEMFile = filepath.Join("testdata", "trust-anchors.pem")
+	o.identityOptions.crtPEMFile = filepath.Join("testdata", "valid-crt.pem")
+	o.identityOptions.keyPEMFile = filepath.Join("testdata", "valid-key.pem")
+	o.identityOptions.trustPEMFile = filepath.Join("testdata", "valid-trust-anchors.pem")
 	return o, nil
 }
 
@@ -307,6 +307,7 @@ func TestValidate(t *testing.T) {
 			crtFilePrefix string
 			expectedError string
 		}{
+			{"valid", ""},
 			{"expired", "failed to verify issuer certs stored on disk: certificate not valid anymore. Expired at: 1990-01-01T01:01:11Z"},
 			{"not-valid-yet", "failed to verify issuer certs stored on disk: certificate not valid before: 2100-01-01T01:00:51Z"},
 			{"wrong-domain", "failed to verify issuer certs stored on disk: invalid credentials: x509: certificate is valid for wrong.linkerd.cluster.local, not identity.linkerd.cluster.local"},

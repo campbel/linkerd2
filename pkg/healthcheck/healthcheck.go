@@ -1063,7 +1063,7 @@ func (hc *HealthChecker) checkIssuerCertsValidity() (*tls.Cred, error) {
 	idctx := configPB.Global.IdentityContext
 	var data *issuercerts.IssuerCertData
 
-	if idctx.Scheme == k8s.IdentityIssuerSchemeLinkerd {
+	if idctx.Scheme == "" || idctx.Scheme == k8s.IdentityIssuerSchemeLinkerd {
 		data, err = issuercerts.FetchIssuerData(hc.kubeAPI, idctx.TrustAnchorsPem, hc.ControlPlaneNamespace)
 	} else {
 		data, err = issuercerts.FetchExternalIssuerData(hc.kubeAPI, hc.ControlPlaneNamespace)
